@@ -1,22 +1,144 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
+import httplib
+import json
+import logging
+import traceback
+from datetime import datetime, date
 
+import dateutil
 import tornado.ioloop
 import tornado.web
+import ConfigParser
+
+from decimal import Decimal
+from sqlalchemy import create_engine
 
 
-def get_category():
-    sql = "SELECT `wp_term_taxonomy`.`taxonomy`,`wp_term_taxonomy`.`parent`,`wp_terms`.* FROM `wp_term_taxonomy`,`wp_terms` WHERE `wp_term_taxonomy`.`term_id`=`wp_terms`.`term_id` AND `wp_term_taxonomy`.`parent`=%s ORDER BY `wp_terms`.`term_order`"
+class JsonDumper(json.JSONEncoder):
+	def default(self, obj):
+		if isinstance(obj, datetime):
+			return obj.replace(tzinfo=dateutil.tz.tzlocal()).strftime('%Y-%m-%dT%H:%M:%SZ%z')
+		elif isinstance(obj, date):
+			return obj.replace(tzinfo=dateutil.tz.tzlocal()).strftime('%Y-%m-%d')
+		elif isinstance(obj, Decimal):
+			return str(obj)
+		else:
+			return json.JSONEncoder.default(self, obj)
+
+
+def json_dumps(data):
+	return json.dumps(data, cls=JsonDumper, sort_keys=False)
 
 
 class MainHandler(tornado.web.RequestHandler):
-    def get(self):
-        self.write("Hello, world")
+	def initialize(self, database, settings):
+		self.database = database
+		self.settings = settings
+
+	def get(self, p):
+		if not p:
+			logging.error("功能调用错误，未提供调用方法")
+			raise tornado.web.HTTPError(404, "功能调用错误，未提供调用方法")
+
+		params = str(p).split('/') if p else []
+		attr = getattr(self, params[0], None)
+
+		if not attr:
+			logging.error("功能方法不存在(%s)" % (str(p)))
+			raise tornado.web.HTTPError(404, "功能方法不存在(%s)" % (str(p)))
+
+		try:
+			args = {}
+			for k in self.request.arguments.keys():
+				args[k] = self.get_argument(k)
+			attr(params[1:], args)
+
+		except tornado.web.HTTPError, e:
+			traceback.print_exc()
+			logging.error("服务器内部功能调用错误(URI: %s, Error: %s, Content: %s)" % (str(p), str(e), str(self.request.body)))
+			raise
+
+		except BaseException, e:
+			traceback.print_exc()
+			logging.error("服务器内部功能调用错误(URI: %s, Error: %s, Content: %s)" % (str(p), str(e), str(self.request.body)))
+			raise
+
+	def set_default_headers(self):
+		self.set_header('Server', 'Wordpress-API-Server')
+
+	def response_json(self, data):
+		self.set_header('Content-Type', 'application/json; charset=utf-8')
+		self.write(json_dumps(data))
+		self.write('\n')
+
+	def write_error(self, status_code, **kwargs):
+		logging.error(u'Error Request Url: ' + unicode(self.request.path))
+		logging.error(u'Error Request Body: ' + unicode(self.request.body if self.request.body else ''))
+		data = {'error': status_code, 'message': httplib.responses[status_code]}
+
+		for item in kwargs['exc_info']:
+			if isinstance(item, tornado.web.HTTPError):
+				data['message'] = item.log_message
+			elif isinstance(item, Exception):
+				data['message'] = str(item)
+
+		self.response_json(data)
+
+	def categorys(self, path, data):
+		parent_id = int(data.get('p', 0))
+		taxonomy = data.get('tax', 'category')
+
+		offset = data.get('offset', 0)
+		limit = data.get('max', 20)
+
+		db = self.database.connection()
+		try:
+			q = []
+			sql = """SELECT `wp_term_taxonomy`.`taxonomy`,`wp_terms`.`term_id`,`wp_terms`.`name`,`wp_terms`.`slug`,`wp_term_taxonomy`.`parent` AS `parent_id`,b.`name` AS `parent_name`,b.`slug` as `parent_slug`,`wp_options`.`option_value` AS `poster` FROM `wp_term_taxonomy` INNER JOIN `wp_terms` ON `wp_term_taxonomy`.`term_id`=`wp_terms`.`term_id` LEFT JOIN `wp_terms` b ON b.term_id = `wp_term_taxonomy`.`parent` LEFT JOIN `wp_options` ON `wp_options`.`option_name` = CONCAT('z_taxonomy_image', `wp_terms`.`term_id`)"""
+			sql += " WHERE `wp_terms`.`slug` != 'uncategorized' AND `wp_term_taxonomy`.`parent_id`=%s"
+			q.append(parent_id)
+			if taxonomy:
+				sql += " AND `wp_term_taxonomy`.`taxonomy`=%s"
+				q.append(taxonomy)
+
+			sql += " LIMIT %s,%s"
+			q.append(offset)
+			q.append(limit)
+
+			rs = db.execute(sql, *q)
+			self.response_json({
+				'offset': offset,
+				'max': limit,
+				'parent_id': parent_id,
+				'data': [{
+					         'id': x['term_id'],
+					         'name': x['name'],
+					         'slug': x['slug'],
+					         'poster': x['poster'],
+					         'parent': {
+						         'id': x['parent_id'],
+						         'name': x['parent_name'],
+						         'slug': x['parent_slug'],
+					         } if x['parent_id'] and x['parent_name'] and x['parent_slug'] else None,
+				         } for x in rs]
+			})
+
+			rs.close()
+
+		finally:
+			db.close()
+
+	def posts(self, path, data):
+		pass
+
 
 if __name__ == "__main__":
-    application = tornado.web.Application([
-        (r"/", MainHandler),
-    ])
-    application.listen(8888)
-    tornado.ioloop.IOLoop.current().start()
+	settings = ConfigParser().read('settings.ini')
+	engine = create_engine(settings['default']['db_uri'], echo=False, case_sensitive=False, convert_unicode=True)
 
+	application = tornado.web.Application([
+		(r"/(.*)", MainHandler, dict(database=engine, settings=settings)),
+	])
+	application.listen(8888)
+	tornado.ioloop.IOLoop.current().start()
