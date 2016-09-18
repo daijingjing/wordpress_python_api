@@ -32,9 +32,9 @@ def json_dumps(data):
 
 
 class MainHandler(tornado.web.RequestHandler):
-	def initialize(self, database, settings):
+	def initialize(self, database):
 		self.database = database
-		self.settings = settings
+		print database
 
 	def get(self, p):
 		if not p:
