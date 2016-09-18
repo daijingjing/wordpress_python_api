@@ -183,13 +183,12 @@ class MainHandler(tornado.web.RequestHandler):
 				sql = "SELECT `id`, `post_date`,`post_title`,`guid` as `url`, `post_mime_type` as `mime_type` FROM `wp_posts`"
 				sql += " WHERE `post_type`='attachment' AND post_parent=%s"
 				rs = db.execute(sql, post_id)
-				return [{
-					        'id': x['id'],
-					        'date': x['post_date'],
-					        'title': x['post_date'],
-					        'mime_type': x['mime_type'],
-					        'url': x['url'],
-				        } for x in rs]
+				return dict((x['id'], {
+					'date': x['post_date'],
+					'title': x['post_date'],
+					'mime_type': x['mime_type'],
+					'url': x['url'],
+				}) for x in rs)
 
 			self.response_json({
 				'offset': offset,
