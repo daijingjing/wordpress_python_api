@@ -100,7 +100,7 @@ class MainHandler(tornado.web.RequestHandler):
 			if taxonomy:
 				sql += " AND `wp_term_taxonomy`.`taxonomy`=%s"
 				q.append(taxonomy)
-
+			sql += " ORDER BY `wp_terms`.`term_order`"
 			sql += " LIMIT %s,%s"
 			q.append(offset)
 			q.append(limit)
