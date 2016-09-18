@@ -34,7 +34,6 @@ def json_dumps(data):
 class MainHandler(tornado.web.RequestHandler):
 	def initialize(self, database):
 		self.database = database
-		print database
 
 	def get(self, p):
 		if not p:
@@ -140,7 +139,7 @@ if __name__ == "__main__":
 	engine = create_engine(settings.get('default', 'db_uri'), echo=False, case_sensitive=False, convert_unicode=True)
 
 	application = tornado.web.Application([
-		(r"/(.*)", MainHandler, dict(database=engine, settings=settings)),
+		(r"/(.*)", MainHandler, dict(database=engine)),
 	])
 	application.listen(8888)
 	tornado.ioloop.IOLoop.current().start()
