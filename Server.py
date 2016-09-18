@@ -152,10 +152,7 @@ class MainHandler(tornado.web.RequestHandler):
 			def post_meta(post_id):
 				sql_meta = "SELECT `meta_key`,`meta_value` FROM `wp_postmeta` WHERE post_id=%s"
 				rs_meta = db.execute(sql_meta, post_id)
-				return [{
-					        'key': x['meta_key'],
-					        'value': x['meta_value'],
-				        } for x in rs_meta if not x['meta_key'].startwiths('_')]
+				return dict((x['meta_key'], x['meta_value']) for x in rs_meta if not x['meta_key'].startswith('_'))
 
 			self.response_json({
 				'offset': offset,
