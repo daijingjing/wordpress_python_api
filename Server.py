@@ -134,6 +134,7 @@ class MainHandler(tornado.web.RequestHandler):
 
 	def func_posts(self, path, data):
 		taxonomy = data.get('tax', 'post')
+		category = data.get('c', None)
 
 		offset = data.get('offset', 0)
 		limit = data.get('max', 20)
@@ -145,12 +146,33 @@ class MainHandler(tornado.web.RequestHandler):
 			sql += " WHERE `wp_posts`.`post_type` =%s AND `wp_posts`.`post_status`='publish'"
 			q.append(taxonomy)
 
+			if category:
+				sql = """SELECT `wp_posts`.`ID`, `wp_posts`.`post_date`,`wp_posts`.`post_title`,`wp_posts`.`post_content` FROM `wp_term_relationships` INNER JOIN `wp_posts` ON `wp_posts`.`ID` = `wp_term_relationships`.`object_id`"""
+				sql += " WHERE `wp_posts`.`post_type` =%s AND `wp_posts`.`post_status`='publish' AND `wp_term_relationships`.`term_taxonomy_id` = %s"
+				q.append(category)
+
 			sql += " ORDER BY `wp_posts`.`post_date` DESC"
 			sql += " LIMIT %s,%s"
 			q.append(offset)
 			q.append(limit)
 
 			rs = db.execute(sql, *q)
+
+			def post_categorys(post_id):
+				sql = "SELECT `wp_term_taxonomy`.`taxonomy`,`wp_terms`.`term_id`,`wp_terms`.`name`,`wp_terms`.`slug`,`wp_term_taxonomy`.`parent` AS `parent_id`,b.`name` AS `parent_name`,b.`slug` as `parent_slug`,`wp_options`.`option_value` AS `poster` FROM `wp_term_relationships` INNER JOIN `wp_term_taxonomy` ON `wp_term_taxonomy`.`term_taxonomy_id` = `wp_term_relationships`.`term_taxonomy_id` INNER JOIN `wp_terms` ON `wp_term_taxonomy`.`term_id`=`wp_terms`.`term_id` LEFT JOIN `wp_terms` b ON b.term_id = `wp_term_taxonomy`.`parent` LEFT JOIN `wp_options` ON `wp_options`.`option_name` = CONCAT('z_taxonomy_image', `wp_terms`.`term_id`)"
+				sql += " WHERE `wp_term_relationships`.`object_id` = %s"
+				rs = db.execute(sql, post_id)
+				return [{
+					        'id': x['term_id'],
+					        'name': x['name'],
+					        'slug': x['slug'],
+					        'poster': x['poster'],
+					        'parent': {
+						        'id': x['parent_id'],
+						        'name': x['parent_name'],
+						        'slug': x['parent_slug'],
+					        } if x['parent_id'] and x['parent_name'] and x['parent_slug'] else None,
+				        } for x in rs]
 
 			def post_meta(post_id):
 				sql = "SELECT `meta_key`,`meta_value` FROM `wp_postmeta` WHERE post_id=%s"
@@ -178,6 +200,7 @@ class MainHandler(tornado.web.RequestHandler):
 					         'data': x['post_date'],
 					         'title': x['post_title'],
 					         'content': x['post_content'],
+					         'category': post_categorys(x['id']),
 					         'meta': post_meta(x['id']),
 					         'attachment': post_attachment(x['id']),
 				         } for x in rs]
@@ -193,7 +216,8 @@ if __name__ == "__main__":
 	settings = ConfigParser()
 	settings.read('settings.ini')
 
-	engine = create_engine(settings.get('default', 'db_uri'), echo=False, case_sensitive=False, convert_unicode=True)
+	engine = create_engine(settings.get('default', 'db_uri'), echo=True, case_sensitive=False, convert_unicode=True,
+	                       echo_pool=True)
 
 	application = tornado.web.Application([
 		(r"/(.*)", MainHandler, dict(database=engine)),
