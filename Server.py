@@ -148,6 +148,15 @@ class MainHandler(tornado.web.RequestHandler):
 			q.append(limit)
 
 			rs = db.execute(sql, *q)
+
+			def post_meta(post_id):
+				sql_meta = "SELECT `meta_key`,`meta_value` FROM `wp_postmeta` WHERE post_id=%s"
+				rs_meta = db.execute(sql_meta, post_id)
+				return [{
+					        'key': x['meta_key'],
+					        'value': x['meta_value'],
+				        } for x in rs_meta if not x[''].startwiths('_')]
+
 			self.response_json({
 				'offset': offset,
 				'max': limit,
@@ -157,6 +166,7 @@ class MainHandler(tornado.web.RequestHandler):
 					         'data': x['post_date'],
 					         'title': x['post_title'],
 					         'content': x['post_content'],
+					         'metas': post_meta(x['id']),
 				         } for x in rs]
 			})
 
