@@ -41,7 +41,7 @@ class MainHandler(tornado.web.RequestHandler):
 			raise tornado.web.HTTPError(404, "功能调用错误，未提供调用方法")
 
 		params = str(p).split('/') if p else []
-		attr = getattr(self, params[0], None)
+		attr = getattr(self, 'func' + params[0], None)
 
 		if not attr:
 			logging.error("功能方法不存在(%s)" % (str(p)))
@@ -84,7 +84,7 @@ class MainHandler(tornado.web.RequestHandler):
 
 		self.response_json(data)
 
-	def categorys(self, path, data):
+	def func_categorys(self, path, data):
 		parent_id = int(data.get('p', 0))
 		taxonomy = data.get('tax', 'category')
 
@@ -129,7 +129,10 @@ class MainHandler(tornado.web.RequestHandler):
 		finally:
 			db.close()
 
-	def posts(self, path, data):
+	def func_post(self, path, data):
+		pass
+
+	def func_posts(self, path, data):
 		taxonomy = data.get('tax', 'post')
 
 		offset = data.get('offset', 0)
@@ -151,8 +154,20 @@ class MainHandler(tornado.web.RequestHandler):
 
 			def post_meta(post_id):
 				sql_meta = "SELECT `meta_key`,`meta_value` FROM `wp_postmeta` WHERE post_id=%s"
-				rs_meta = db.execute(sql_meta, post_id)
-				return dict((x['meta_key'], x['meta_value']) for x in rs_meta if not x['meta_key'].startswith('_'))
+				rs = db.execute(sql_meta, post_id)
+				return dict((x['meta_key'], x['meta_value']) for x in rs if not x['meta_key'].startswith('_'))
+
+			def post_attachment(post_id):
+				sql = "SELECT `id`, `post_date`,`post_title`,`guid` as `url`, `post_mime_type` as `mime_type` FROM `wp_posts`"
+				sql += " WHERE `post_type`='attachment' AND post_parent=%s"
+				rs = db.execute(sql, post_id)
+				return [{
+					        'id': x['id'],
+					        'date': x['post_date'],
+					        'title': x['post_date'],
+					        'mime_type': x['mime_type'],
+					        'url': x['url'],
+				        } for x in rs if not x['meta_key'].startswith('_')]
 
 			self.response_json({
 				'offset': offset,
@@ -163,7 +178,8 @@ class MainHandler(tornado.web.RequestHandler):
 					         'data': x['post_date'],
 					         'title': x['post_title'],
 					         'content': x['post_content'],
-					         'metas': post_meta(x['id']),
+					         'meta': post_meta(x['id']),
+					         'attachment': post_attachment(x['id']),
 				         } for x in rs]
 			})
 
