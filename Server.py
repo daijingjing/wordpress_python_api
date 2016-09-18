@@ -109,6 +109,7 @@ class MainHandler(tornado.web.RequestHandler):
 			self.response_json({
 				'offset': offset,
 				'max': limit,
+				'tax': taxonomy,
 				'parent_id': parent_id,
 				'data': [{
 					         'id': x['term_id'],
@@ -129,7 +130,40 @@ class MainHandler(tornado.web.RequestHandler):
 			db.close()
 
 	def posts(self, path, data):
-		pass
+		taxonomy = data.get('tax', 'post')
+
+		offset = data.get('offset', 0)
+		limit = data.get('max', 20)
+
+		db = self.database.connect()
+		try:
+			q = []
+			sql = """SELECT `wp_posts`.`ID`, `wp_posts`.`post_date`,`wp_posts`.`post_title`,`wp_posts`.`post_content` FROM `wp_posts`"""
+			sql += " WHERE `wp_posts`.`post_type` =%s AND `wp_posts`.`post_status`='publish'"
+			q.append(taxonomy)
+
+			sql += " ORDER BY `wp_posts`.`post_date` DESC"
+			sql += " LIMIT %s,%s"
+			q.append(offset)
+			q.append(limit)
+
+			rs = db.execute(sql, *q)
+			self.response_json({
+				'offset': offset,
+				'max': limit,
+				'tax': taxonomy,
+				'data': [{
+					         'id': x['id'],
+					         'data': x['post_date'],
+					         'title': x['post_title'],
+					         'content': x['post_content'],
+				         } for x in rs]
+			})
+
+			rs.close()
+
+		finally:
+			db.close()
 
 
 if __name__ == "__main__":
