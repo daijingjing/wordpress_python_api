@@ -153,21 +153,21 @@ class MainHandler(tornado.web.RequestHandler):
 			rs = db.execute(sql, *q)
 
 			def post_meta(post_id):
-				sql_meta = "SELECT `meta_key`,`meta_value` FROM `wp_postmeta` WHERE post_id=%s"
-				rs = db.execute(sql_meta, post_id)
-				return dict((x['meta_key'], x['meta_value']) for x in rs if not x['meta_key'].startswith('_'))
+				meta_sql = "SELECT `meta_key`,`meta_value` FROM `wp_postmeta` WHERE post_id=%s"
+				meta_rs = db.execute(meta_sql, post_id)
+				return dict((x['meta_key'], x['meta_value']) for x in meta_rs if not x['meta_key'].startswith('_'))
 
 			def post_attachment(post_id):
-				sql = "SELECT `id`, `post_date`,`post_title`,`guid` as `url`, `post_mime_type` as `mime_type` FROM `wp_posts`"
-				sql += " WHERE `post_type`='attachment' AND post_parent=%s"
-				rs = db.execute(sql, post_id)
+				attach_sql = "SELECT `id`, `post_date`,`post_title`,`guid` as `url`, `post_mime_type` as `mime_type` FROM `wp_posts`"
+				attach_sql += " WHERE `post_type`='attachment' AND post_parent=%s"
+				attach_rs = db.execute(attach_sql, post_id)
 				return [{
 					        'id': x['id'],
 					        'date': x['post_date'],
 					        'title': x['post_date'],
 					        'mime_type': x['mime_type'],
 					        'url': x['url'],
-				        } for x in rs if not x['meta_key'].startswith('_')]
+				        } for x in attach_rs if not x['meta_key'].startswith('_')]
 
 			self.response_json({
 				'offset': offset,
