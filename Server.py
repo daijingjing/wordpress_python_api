@@ -9,7 +9,7 @@ from datetime import datetime, date
 import dateutil
 import tornado.ioloop
 import tornado.web
-import ConfigParser
+from ConfigParser import ConfigParser
 
 from decimal import Decimal
 from sqlalchemy import create_engine
