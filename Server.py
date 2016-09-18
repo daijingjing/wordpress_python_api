@@ -6,7 +6,7 @@ import logging
 import traceback
 from datetime import datetime, date
 
-import dateutil
+import dateutil.tz
 import tornado.ioloop
 import tornado.web
 from ConfigParser import ConfigParser
