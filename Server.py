@@ -41,7 +41,7 @@ class MainHandler(tornado.web.RequestHandler):
 			raise tornado.web.HTTPError(404, "功能调用错误，未提供调用方法")
 
 		params = str(p).split('/') if p else []
-		attr = getattr(self, 'func' + params[0], None)
+		attr = getattr(self, 'func_' + params[0], None)
 
 		if not attr:
 			logging.error("功能方法不存在(%s)" % (str(p)))
