@@ -134,7 +134,9 @@ class MainHandler(tornado.web.RequestHandler):
 
 
 if __name__ == "__main__":
-	settings = ConfigParser().read('settings.ini')
+	settings = ConfigParser()
+	settings.read('settings.ini')
+
 	engine = create_engine(settings['default']['db_uri'], echo=False, case_sensitive=False, convert_unicode=True)
 
 	application = tornado.web.Application([
