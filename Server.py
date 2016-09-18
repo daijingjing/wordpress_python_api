@@ -155,7 +155,7 @@ class MainHandler(tornado.web.RequestHandler):
 				return [{
 					        'key': x['meta_key'],
 					        'value': x['meta_value'],
-				        } for x in rs_meta if not x[''].startwiths('_')]
+				        } for x in rs_meta if not x['meta_key'].startwiths('_')]
 
 			self.response_json({
 				'offset': offset,
