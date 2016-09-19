@@ -193,7 +193,7 @@ def query_posts(db, taxonomy, category, offset, limit):
 		'offset': offset,
 		'max': limit,
 		'tax': taxonomy,
-		'category': post_categorys(db, category) if category else None,
+		'category': query_category(db, category) if category else None,
 		'data': [{
 			         'id': x['id'],
 			         'data': x['post_date'],
