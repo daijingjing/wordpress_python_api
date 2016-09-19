@@ -31,6 +31,154 @@ def json_dumps(data):
 	return json.dumps(data, cls=JsonDumper, sort_keys=False)
 
 
+def post_categorys(db, post_id):
+	sql = "SELECT `wp_term_taxonomy`.`taxonomy`,`wp_terms`.`term_id`,`wp_terms`.`name`,`wp_terms`.`slug`,`wp_term_taxonomy`.`parent` AS `parent_id`,b.`name` AS `parent_name`,b.`slug` as `parent_slug`,`wp_options`.`option_value` AS `poster` FROM `wp_term_relationships` INNER JOIN `wp_term_taxonomy` ON `wp_term_taxonomy`.`term_taxonomy_id` = `wp_term_relationships`.`term_taxonomy_id` INNER JOIN `wp_terms` ON `wp_term_taxonomy`.`term_id`=`wp_terms`.`term_id` LEFT JOIN `wp_terms` b ON b.term_id = `wp_term_taxonomy`.`parent` LEFT JOIN `wp_options` ON `wp_options`.`option_name` = CONCAT('z_taxonomy_image', `wp_terms`.`term_id`)"
+	sql += " WHERE `wp_term_relationships`.`object_id` = %s"
+
+	rs = db.execute(sql, post_id)
+
+	return [{
+		        'id': x['term_id'],
+		        'name': x['name'],
+		        'slug': x['slug'],
+		        'poster': x['poster'],
+		        'parent': {
+			        'id': x['parent_id'],
+			        'name': x['parent_name'],
+			        'slug': x['parent_slug'],
+		        } if x['parent_id'] and x['parent_name'] and x['parent_slug'] else None,
+	        } for x in rs]
+
+
+def post_meta(db, post_id):
+	sql = "SELECT `meta_key`,`meta_value` FROM `wp_postmeta` WHERE post_id=%s"
+
+	rs = db.execute(sql, post_id)
+
+	return dict((x['meta_key'], x['meta_value']) for x in rs if not x['meta_key'].startswith('_'))
+
+
+def post_attachment(db, post_id):
+	sql = "SELECT `id`, `post_date`,`post_title`,`guid` as `url`, `post_mime_type` as `mime_type` FROM `wp_posts`"
+	sql += " WHERE `post_type`='attachment' AND post_parent=%s"
+
+	rs = db.execute(sql, post_id)
+
+	return dict((x['id'], {
+		'date': x['post_date'],
+		'title': x['post_date'],
+		'mime_type': x['mime_type'],
+		'url': x['url'],
+	}) for x in rs)
+
+
+def category_parents(db, category_id):
+	parent = []
+	p = db.execute('SELECT `parent` FROM `wp_term_taxonomy` WHERE `term_id`=%s', category_id).scalar()
+	if p:
+		parent.append(p)
+		parent += category_parents(db, p)
+
+	return parent
+
+
+def query_categorys(db, taxonomy, parent_id, offset, limit):
+	q = []
+	sql = """SELECT `wp_term_taxonomy`.`taxonomy`,`wp_terms`.`term_id`,`wp_terms`.`name`,`wp_terms`.`slug`,`wp_term_taxonomy`.`parent` AS `parent_id`,b.`name` AS `parent_name`,b.`slug` as `parent_slug`,`wp_options`.`option_value` AS `poster` FROM `wp_term_taxonomy` INNER JOIN `wp_terms` ON `wp_term_taxonomy`.`term_id`=`wp_terms`.`term_id` LEFT JOIN `wp_terms` b ON b.term_id = `wp_term_taxonomy`.`parent` LEFT JOIN `wp_options` ON `wp_options`.`option_name` = CONCAT('z_taxonomy_image', `wp_terms`.`term_id`)"""
+	sql += " WHERE `wp_terms`.`slug` != 'uncategorized' AND `wp_term_taxonomy`.`parent`=%s"
+	q.append(parent_id)
+
+	if taxonomy:
+		sql += " AND `wp_term_taxonomy`.`taxonomy`=%s"
+		q.append(taxonomy)
+
+	sql += " ORDER BY `wp_terms`.`term_order`"
+	sql += " LIMIT %s,%s"
+	q.append(offset)
+	q.append(limit)
+
+	rs = db.execute(sql, *q)
+
+	results = {
+		'offset': offset,
+		'max': limit,
+		'tax': taxonomy,
+		'parent_id': parent_id,
+		'data': [{
+			         'id': x['term_id'],
+			         'name': x['name'],
+			         'slug': x['slug'],
+			         'poster': x['poster'],
+			         'parent': {
+				         'id': x['parent_id'],
+				         'name': x['parent_name'],
+				         'slug': x['parent_slug'],
+			         } if x['parent_id'] and x['parent_name'] and x['parent_slug'] else None,
+		         } for x in rs]
+	}
+	rs.close()
+	return results
+
+
+def query_post(db, post_id):
+	sql = """SELECT `wp_posts`.`ID` as `id`, `wp_posts`.`post_date`,`wp_posts`.`post_title`,`wp_posts`.`post_content` FROM `wp_posts`"""
+	sql += " WHERE `wp_posts`.`ID`=%s AND `wp_posts`.`post_status`='publish'"
+
+	x = db.execute(sql, post_id).first()
+
+	return {
+		'id': x['id'],
+		'data': x['post_date'],
+		'title': x['post_title'],
+		'content': x['post_content'],
+		'category': post_categorys(db, x['id']),
+		'meta': post_meta(db, x['id']),
+		'attachment': post_attachment(db, x['id']),
+	} if x else None
+
+
+def query_posts(db, taxonomy, category, offset, limit):
+	q = []
+	sql = """SELECT `wp_posts`.`ID`, `wp_posts`.`post_date`,`wp_posts`.`post_title`,`wp_posts`.`post_content` FROM `wp_posts`"""
+	sql += " WHERE `wp_posts`.`post_type` =%s AND `wp_posts`.`post_status`='publish'"
+	q.append(taxonomy)
+
+	if category:
+		categorys = category_parents(db, category)
+		categorys.append(category)
+
+		sql = """SELECT `wp_posts`.`ID`, `wp_posts`.`post_date`,`wp_posts`.`post_title`,`wp_posts`.`post_content` FROM `wp_term_relationships` INNER JOIN `wp_posts` ON `wp_posts`.`ID` = `wp_term_relationships`.`object_id`"""
+		sql += " WHERE `wp_posts`.`post_type` =%s AND `wp_posts`.`post_status`='publish'"
+		sql += " AND `wp_term_relationships`.`term_taxonomy_id` IN (%s)" % ', '.join(map(lambda x: '%s', categorys))
+
+		q.append(categorys)
+
+	sql += " ORDER BY `wp_posts`.`post_date` DESC"
+	sql += " LIMIT %s,%s"
+	q.append(offset)
+	q.append(limit)
+
+	rs = db.execute(sql, *q)
+
+	results = {
+		'offset': offset,
+		'max': limit,
+		'tax': taxonomy,
+		'data': [{
+			         'id': x['id'],
+			         'data': x['post_date'],
+			         'title': x['post_title'],
+			         'content': x['post_content'],
+			         'category': post_categorys(db, x['id']),
+			         'meta': post_meta(db, x['id']),
+			         'attachment': post_attachment(db, x['id']),
+		         } for x in rs]
+	}
+	rs.close()
+
+	return results
+
+
 class MainHandler(tornado.web.RequestHandler):
 	def initialize(self, database):
 		self.database = database
@@ -88,124 +236,45 @@ class MainHandler(tornado.web.RequestHandler):
 		parent_id = int(data.get('p', 0))
 		taxonomy = data.get('tax', 'category')
 
-		offset = data.get('offset', 0)
-		limit = data.get('max', 20)
+		offset = max(0, int(data.get('offset', 0)))
+		limit = min(100, int(data.get('max', 20)))
 
 		db = self.database.connect()
 		try:
-			q = []
-			sql = """SELECT `wp_term_taxonomy`.`taxonomy`,`wp_terms`.`term_id`,`wp_terms`.`name`,`wp_terms`.`slug`,`wp_term_taxonomy`.`parent` AS `parent_id`,b.`name` AS `parent_name`,b.`slug` as `parent_slug`,`wp_options`.`option_value` AS `poster` FROM `wp_term_taxonomy` INNER JOIN `wp_terms` ON `wp_term_taxonomy`.`term_id`=`wp_terms`.`term_id` LEFT JOIN `wp_terms` b ON b.term_id = `wp_term_taxonomy`.`parent` LEFT JOIN `wp_options` ON `wp_options`.`option_name` = CONCAT('z_taxonomy_image', `wp_terms`.`term_id`)"""
-			sql += " WHERE `wp_terms`.`slug` != 'uncategorized' AND `wp_term_taxonomy`.`parent`=%s"
-			q.append(parent_id)
-			if taxonomy:
-				sql += " AND `wp_term_taxonomy`.`taxonomy`=%s"
-				q.append(taxonomy)
-			sql += " ORDER BY `wp_terms`.`term_order`"
-			sql += " LIMIT %s,%s"
-			q.append(offset)
-			q.append(limit)
+			results = query_categorys(db, taxonomy, parent_id, offset, limit)
 
-			rs = db.execute(sql, *q)
-			self.response_json({
-				'offset': offset,
-				'max': limit,
-				'tax': taxonomy,
-				'parent_id': parent_id,
-				'data': [{
-					         'id': x['term_id'],
-					         'name': x['name'],
-					         'slug': x['slug'],
-					         'poster': x['poster'],
-					         'parent': {
-						         'id': x['parent_id'],
-						         'name': x['parent_name'],
-						         'slug': x['parent_slug'],
-					         } if x['parent_id'] and x['parent_name'] and x['parent_slug'] else None,
-				         } for x in rs]
-			})
+			self.response_json(results)
 
-			rs.close()
 
 		finally:
 			db.close()
 
 	def func_post(self, path, data):
-		pass
+		if not path:
+			raise tornado.web.HTTPError(404, "方法调用错误,未提供文章ID")
+
+		db = self.database.connect()
+		try:
+			results = query_post(db, path)
+			if not path:
+				raise tornado.web.HTTPError(404, "文章不存在(%s)" % (str(path)))
+
+			self.response_json(results)
+
+		finally:
+			db.close()
 
 	def func_posts(self, path, data):
 		taxonomy = data.get('tax', 'post')
 		category = data.get('c', None)
 
-		offset = data.get('offset', 0)
-		limit = data.get('max', 20)
+		offset = max(0, int(data.get('offset', 0)))
+		limit = min(100, int(data.get('max', 20)))
 
 		db = self.database.connect()
 		try:
-			q = []
-			sql = """SELECT `wp_posts`.`ID`, `wp_posts`.`post_date`,`wp_posts`.`post_title`,`wp_posts`.`post_content` FROM `wp_posts`"""
-			sql += " WHERE `wp_posts`.`post_type` =%s AND `wp_posts`.`post_status`='publish'"
-			q.append(taxonomy)
-
-			if category:
-				sql = """SELECT `wp_posts`.`ID`, `wp_posts`.`post_date`,`wp_posts`.`post_title`,`wp_posts`.`post_content` FROM `wp_term_relationships` INNER JOIN `wp_posts` ON `wp_posts`.`ID` = `wp_term_relationships`.`object_id`"""
-				sql += " WHERE `wp_posts`.`post_type` =%s AND `wp_posts`.`post_status`='publish' AND `wp_term_relationships`.`term_taxonomy_id` = %s"
-				q.append(category)
-
-			sql += " ORDER BY `wp_posts`.`post_date` DESC"
-			sql += " LIMIT %s,%s"
-			q.append(offset)
-			q.append(limit)
-
-			rs = db.execute(sql, *q)
-
-			def post_categorys(post_id):
-				sql = "SELECT `wp_term_taxonomy`.`taxonomy`,`wp_terms`.`term_id`,`wp_terms`.`name`,`wp_terms`.`slug`,`wp_term_taxonomy`.`parent` AS `parent_id`,b.`name` AS `parent_name`,b.`slug` as `parent_slug`,`wp_options`.`option_value` AS `poster` FROM `wp_term_relationships` INNER JOIN `wp_term_taxonomy` ON `wp_term_taxonomy`.`term_taxonomy_id` = `wp_term_relationships`.`term_taxonomy_id` INNER JOIN `wp_terms` ON `wp_term_taxonomy`.`term_id`=`wp_terms`.`term_id` LEFT JOIN `wp_terms` b ON b.term_id = `wp_term_taxonomy`.`parent` LEFT JOIN `wp_options` ON `wp_options`.`option_name` = CONCAT('z_taxonomy_image', `wp_terms`.`term_id`)"
-				sql += " WHERE `wp_term_relationships`.`object_id` = %s"
-				rs = db.execute(sql, post_id)
-				return [{
-					        'id': x['term_id'],
-					        'name': x['name'],
-					        'slug': x['slug'],
-					        'poster': x['poster'],
-					        'parent': {
-						        'id': x['parent_id'],
-						        'name': x['parent_name'],
-						        'slug': x['parent_slug'],
-					        } if x['parent_id'] and x['parent_name'] and x['parent_slug'] else None,
-				        } for x in rs]
-
-			def post_meta(post_id):
-				sql = "SELECT `meta_key`,`meta_value` FROM `wp_postmeta` WHERE post_id=%s"
-				rs = db.execute(sql, post_id)
-				return dict((x['meta_key'], x['meta_value']) for x in rs if not x['meta_key'].startswith('_'))
-
-			def post_attachment(post_id):
-				sql = "SELECT `id`, `post_date`,`post_title`,`guid` as `url`, `post_mime_type` as `mime_type` FROM `wp_posts`"
-				sql += " WHERE `post_type`='attachment' AND post_parent=%s"
-				rs = db.execute(sql, post_id)
-				return dict((x['id'], {
-					'date': x['post_date'],
-					'title': x['post_date'],
-					'mime_type': x['mime_type'],
-					'url': x['url'],
-				}) for x in rs)
-
-			self.response_json({
-				'offset': offset,
-				'max': limit,
-				'tax': taxonomy,
-				'data': [{
-					         'id': x['id'],
-					         'data': x['post_date'],
-					         'title': x['post_title'],
-					         'content': x['post_content'],
-					         'category': post_categorys(x['id']),
-					         'meta': post_meta(x['id']),
-					         'attachment': post_attachment(x['id']),
-				         } for x in rs]
-			})
-
-			rs.close()
+			results = query_posts(db, taxonomy, category, offset, limit)
+			self.response_json(results)
 
 		finally:
 			db.close()
