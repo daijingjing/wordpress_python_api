@@ -1,0 +1,2 @@
+[default]
+db_uri=mysql+mysqldb://root:123456@localhost:3306/test?charset=utf8&use_unicode=1
