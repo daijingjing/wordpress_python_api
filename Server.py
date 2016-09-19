@@ -92,6 +92,25 @@ def category_childrens(db, category_id):
 	return parent
 
 
+def query_category(db, category_id):
+	sql = """SELECT `wp_term_taxonomy`.`taxonomy`,`wp_terms`.`term_id`,`wp_terms`.`name`,`wp_terms`.`slug`,`wp_term_taxonomy`.`parent` AS `parent_id`,b.`name` AS `parent_name`,b.`slug` as `parent_slug`,`wp_options`.`option_value` AS `poster` FROM `wp_term_taxonomy` INNER JOIN `wp_terms` ON `wp_term_taxonomy`.`term_id`=`wp_terms`.`term_id` LEFT JOIN `wp_terms` b ON b.term_id = `wp_term_taxonomy`.`parent` LEFT JOIN `wp_options` ON `wp_options`.`option_name` = CONCAT('z_taxonomy_image', `wp_terms`.`term_id`)"""
+	sql += " WHERE `wp_terms`.`term_id`=%s"
+
+	x = db.execute(sql, category_id).first()
+
+	return {
+		'id': x['term_id'],
+		'name': x['name'],
+		'slug': x['slug'],
+		'poster': x['poster'],
+		'parent': {
+			'id': x['parent_id'],
+			'name': x['parent_name'],
+			'slug': x['parent_slug'],
+		} if x['parent_id'] and x['parent_name'] and x['parent_slug'] else None,
+	} if x else None
+
+
 def query_categorys(db, taxonomy, parent_id, offset, limit):
 	q = []
 	sql = """SELECT `wp_term_taxonomy`.`taxonomy`,`wp_terms`.`term_id`,`wp_terms`.`name`,`wp_terms`.`slug`,`wp_term_taxonomy`.`parent` AS `parent_id`,b.`name` AS `parent_name`,b.`slug` as `parent_slug`,`wp_options`.`option_value` AS `poster` FROM `wp_term_taxonomy` INNER JOIN `wp_terms` ON `wp_term_taxonomy`.`term_id`=`wp_terms`.`term_id` LEFT JOIN `wp_terms` b ON b.term_id = `wp_term_taxonomy`.`parent` LEFT JOIN `wp_options` ON `wp_options`.`option_name` = CONCAT('z_taxonomy_image', `wp_terms`.`term_id`)"""
@@ -174,6 +193,7 @@ def query_posts(db, taxonomy, category, offset, limit):
 		'offset': offset,
 		'max': limit,
 		'tax': taxonomy,
+		'category': post_categorys(db, category) if category else None,
 		'data': [{
 			         'id': x['id'],
 			         'data': x['post_date'],
