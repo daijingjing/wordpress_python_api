@@ -151,7 +151,8 @@ def query_posts(db, taxonomy, category, offset, limit):
 		sql += " WHERE `wp_posts`.`post_type` =%s AND `wp_posts`.`post_status`='publish'"
 		sql += " AND `wp_term_relationships`.`term_taxonomy_id` IN (%s)" % ', '.join(map(lambda x: '%s', categorys))
 
-		q.append(categorys)
+		q.append(taxonomy)
+		q += categorys
 
 	sql += " ORDER BY `wp_posts`.`post_date` DESC"
 	sql += " LIMIT %s,%s"
