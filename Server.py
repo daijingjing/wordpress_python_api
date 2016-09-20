@@ -334,7 +334,7 @@ class MainHandler(tornado.web.RequestHandler):
 		background_color = (200, 200, 200)
 		text_color = (0, 0, 0)
 
-		font = ImageFont.truetype('AppleGothic.ttf', font_size)
+		font = ImageFont.truetype('wryh.ttf', font_size)
 		im = Image.new("RGBA", image_size, background_color)
 		text_size = font.getsize(text)
 
