@@ -331,15 +331,15 @@ class MainHandler(tornado.web.RequestHandler):
 
 		font_size = data.get('fontsize', 100)
 		image_size = (int(data.get('s', 200)), int(data.get('s', 200)))
-		background_color = (200, 200, 200)
-		text_color = (0, 0, 0)
+		background_color = (220, 220, 220)
+		text_color = (110, 110, 255)
 
 		font = ImageFont.truetype('wryh.ttf', font_size)
 		im = Image.new("RGBA", image_size, background_color)
 		text_size = font.getsize(text)
 
 		draw = ImageDraw.Draw(im)
-		draw.text(((image_size[0] - text_size[0]) / 2, (image_size[1] - text_size[1]) / 2), text,
+		draw.text(((image_size[0] - text_size[0]) / 2, (image_size[1] - text_size[1]) / 2 - 10), text,
 		          text_color, font=font)
 		del draw
 
