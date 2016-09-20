@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 import httplib
+import io
 import json
 import logging
 import traceback
@@ -318,6 +319,35 @@ class MainHandler(tornado.web.RequestHandler):
 
 		finally:
 			db.close()
+
+	def func_icon(self, path, data):
+		from PIL import Image
+		from PIL import ImageDraw
+		from PIL import ImageFont
+
+		text = data.get('txt', ' 测 ')
+		font_size = data.get('fontsize', 100)
+		image_size = (int(data.get('s', 200)), int(data.get('s', 200)))
+		background_color = (200, 200, 200)
+		text_color = (0, 0, 0)
+
+		font = ImageFont.truetype('AppleGothic.ttf', font_size)
+		im = Image.new("RGBA", image_size, background_color)
+		text_size = font.getsize(text)
+
+		draw = ImageDraw.Draw(im)
+		draw.text(((image_size[0] - text_size[0]) / 2, (image_size[1] - text_size[1]) / 2), text.decode('UTF-8'),
+		          text_color, font=font)
+		del draw
+
+		o = io.BytesIO()
+		im.save(o, format="PNG")
+
+		s = o.getvalue()
+		self.set_header('Content-type', 'image/png')
+		self.set_header('Content-length', len(s))
+		self.write(s)
+		self.finish()
 
 
 if __name__ == "__main__":
