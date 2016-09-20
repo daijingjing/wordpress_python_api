@@ -84,7 +84,7 @@ def category_parents(db, category_id):
 
 def category_childrens(db, category_id):
 	parent = []
-	childrens = db.execute('SELECT `term_id` FROM `wp_term_taxonomy` WHERE `parent`=%s', category_id).all()
+	childrens = db.execute('SELECT `term_id` FROM `wp_term_taxonomy` WHERE `parent`=%s', category_id).fetchall()
 	parent += [x['term_id'] for x in childrens]
 	for p in parent:
 		parent += category_childrens(db, p)
