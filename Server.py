@@ -103,11 +103,7 @@ def query_category(db, category_id):
 		'name': x['name'],
 		'slug': x['slug'],
 		'poster': x['poster'],
-		'parent': {
-			'id': x['parent_id'],
-			'name': x['parent_name'],
-			'slug': x['parent_slug'],
-		} if x['parent_id'] and x['parent_name'] and x['parent_slug'] else None,
+		'parent': query_category(db, x['parent_id']) if x['parent_id'] else None,
 	} if x else None
 
 
@@ -328,7 +324,7 @@ if __name__ == "__main__":
 	settings = ConfigParser()
 	settings.read('settings.ini')
 
-	engine = create_engine(settings.get('default', 'db_uri'), echo=True, case_sensitive=False, convert_unicode=True,
+	engine = create_engine(settings.get('default', 'db_uri'), echo=False, case_sensitive=False, convert_unicode=True,
 	                       echo_pool=True)
 
 	application = tornado.web.Application([
