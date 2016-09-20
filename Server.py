@@ -84,9 +84,9 @@ def category_parents(db, category_id):
 
 def category_childrens(db, category_id):
 	parent = []
-	p = db.execute('SELECT `term_id` FROM `wp_term_taxonomy` WHERE `parent`=%s', category_id).scalar()
-	if p:
-		parent.append(p)
+	childrens = db.execute('SELECT `term_id` FROM `wp_term_taxonomy` WHERE `parent`=%s', category_id).all()
+	parent += [x['term_id'] for x in childrens]
+	for p in parent:
 		parent += category_childrens(db, p)
 
 	return parent
@@ -178,7 +178,7 @@ def query_posts(db, taxonomy, category, offset, limit):
 
 		sql = """SELECT `wp_posts`.`ID`, `wp_posts`.`post_date`,`wp_posts`.`post_title`,`wp_posts`.`post_content` FROM `wp_term_relationships` INNER JOIN `wp_posts` ON `wp_posts`.`ID` = `wp_term_relationships`.`object_id`"""
 		sql += " WHERE `wp_posts`.`post_type` =%s AND `wp_posts`.`post_status`='publish'"
-		sql += " AND `wp_term_relationships`.`term_taxonomy_id` IN (%s)" % ', '.join(map(lambda x: '%s', categorys))
+		sql += " AND `wp_term_relationships`.`term_taxonomy_id` IN (%s)" % ','.join(map(lambda x: '%s', categorys))
 
 		q += categorys
 
@@ -262,6 +262,21 @@ class MainHandler(tornado.web.RequestHandler):
 
 		self.response_json(data)
 
+	def func_category(self, path, data):
+		if not path:
+			raise tornado.web.HTTPError(404, "方法调用错误,未提供分类ID")
+
+		db = self.database.connect()
+		try:
+			results = query_category(db, path)
+			if not results:
+				raise tornado.web.HTTPError(404, "分类信息不存在(%s)" % (str(path)))
+
+			self.response_json(results)
+
+		finally:
+			db.close()
+
 	def func_categorys(self, path, data):
 		parent_id = int(data.get('p', 0))
 		taxonomy = data.get('tax', 'category')
@@ -275,7 +290,6 @@ class MainHandler(tornado.web.RequestHandler):
 
 			self.response_json(results)
 
-
 		finally:
 			db.close()
 
@@ -286,7 +300,7 @@ class MainHandler(tornado.web.RequestHandler):
 		db = self.database.connect()
 		try:
 			results = query_post(db, path)
-			if not path:
+			if not results:
 				raise tornado.web.HTTPError(404, "文章不存在(%s)" % (str(path)))
 
 			self.response_json(results)
