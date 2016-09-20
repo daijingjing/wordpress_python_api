@@ -325,7 +325,10 @@ class MainHandler(tornado.web.RequestHandler):
 		from PIL import ImageDraw
 		from PIL import ImageFont
 
-		text = data.get('txt', u' 测 ')
+		text = data.get('txt', u'测')
+		if not isinstance(text, unicode):
+			text = unicode(text)
+
 		font_size = data.get('fontsize', 100)
 		image_size = (int(data.get('s', 200)), int(data.get('s', 200)))
 		background_color = (200, 200, 200)
