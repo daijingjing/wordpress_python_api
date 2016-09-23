@@ -358,7 +358,7 @@ if __name__ == "__main__":
 	settings.read('settings.ini')
 
 	engine = create_engine(settings.get('default', 'db_uri'), echo=False, case_sensitive=False, convert_unicode=True,
-	                       echo_pool=True)
+	                       echo_pool=True, pool_recycle=3600)
 
 	application = tornado.web.Application([
 		(r"/(.*)", MainHandler, dict(database=engine)),
