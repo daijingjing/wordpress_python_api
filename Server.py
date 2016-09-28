@@ -60,7 +60,7 @@ def post_meta(db, post_id):
 
 
 def post_attachment(db, post_id):
-	sql = "SELECT `wp_posts`.`id`, `wp_posts`.`post_date`,`wp_posts`.`post_title`,`wp_posts`.`guid` as `url`, `wp_posts`.`post_mime_type` as `mime_type` FROM `wp_postmeta` JOIN `wp_posts` ON `wp_postmeta`.`meta_value` = `wp_posts`.`ID`"
+	sql = "SELECT DISTINCT `wp_posts`.`id`, `wp_posts`.`post_date`,`wp_posts`.`post_title`,`wp_posts`.`guid` as `url`, `wp_posts`.`post_mime_type` as `mime_type` FROM `wp_postmeta` JOIN `wp_posts` ON `wp_postmeta`.`meta_value` = `wp_posts`.`ID`"
 	sql += " WHERE `wp_postmeta`.`post_id` = %s"
 
 	rs = db.execute(sql, post_id)
