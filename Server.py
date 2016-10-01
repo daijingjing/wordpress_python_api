@@ -130,6 +130,7 @@ def query_categorys(db, taxonomy, parent_id, offset, limit):
 		'max': limit,
 		'tax': taxonomy,
 		'parent_id': parent_id,
+		'parent': query_category(db, parent_id),
 		'data': [{
 			         'id': x['term_id'],
 			         'name': x['name'],
