@@ -275,6 +275,18 @@ class MainHandler(tornado.web.RequestHandler):
 		finally:
 			db.close()
 
+	def func_category(self, path, data):
+		id = int(data.get('id', 0))
+
+		db = self.database.connect()
+		try:
+			results = query_category(db, id)
+
+			self.response_json(results)
+
+		finally:
+			db.close()
+
 	def func_categorys(self, path, data):
 		parent_id = int(data.get('p', 0))
 		taxonomy = data.get('tax', 'category')
@@ -332,7 +344,7 @@ class MainHandler(tornado.web.RequestHandler):
 
 		font_size = data.get('fontsize', 100)
 		image_size = (int(data.get('s', 200)), int(data.get('s', 200)))
-		background_color = ImageColor.getrgb(data['bkcolor']) if 'bkcolor' in data else (0,0,0,0)
+		background_color = ImageColor.getrgb(data['bkcolor']) if 'bkcolor' in data else (0, 0, 0, 0)
 		text_color = ImageColor.getrgb(data['color']) if 'color' in data else (128, 128, 128)
 
 		font = ImageFont.truetype('wryh.ttf', font_size)
@@ -340,7 +352,8 @@ class MainHandler(tornado.web.RequestHandler):
 		text_size = font.getsize(text)
 
 		draw = ImageDraw.Draw(im)
-		draw.text((int((image_size[0] - text_size[0]) / 2), int((image_size[1] - text_size[1]) / 2 - font_size/10)), text,
+		draw.text((int((image_size[0] - text_size[0]) / 2), int((image_size[1] - text_size[1]) / 2 - font_size / 10)),
+		          text,
 		          text_color, font=font)
 		del draw
 
