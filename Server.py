@@ -97,7 +97,8 @@ def category_parents(db, category_id):
 
 def category_childrens(db, category_id):
 	parent = []
-	childrens = db.execute('SELECT DISTINCT `term_id` FROM `wp_term_taxonomy` WHERE `parent`=%s', category_id).fetchall()
+	childrens = db.execute('SELECT DISTINCT `term_id` FROM `wp_term_taxonomy` WHERE `parent`=%s',
+	                       category_id).fetchall()
 	parent += [x['term_id'] for x in childrens]
 	for p in parent:
 		parent += category_childrens(db, p)
@@ -175,6 +176,56 @@ def query_post(db, post_id):
 		'attachment': post_attachment(db, x['id']),
 		'visit': get_post_visit(db, x['id']),
 	} if x else None
+
+
+# WHERE MATCH (post_title) AGAINST ('河北 宜昌' IN NATURAL LANGUAGE MODE)
+def search_posts(db, taxonomy, category, offset, limit, kw):
+	q = []
+	sql = """SELECT DISTINCT `wp_posts`.`ID`, `wp_posts`.`post_date`,`wp_posts`.`post_title`,`wp_posts`.`post_content` FROM `wp_posts`"""
+	sql += " WHERE `wp_posts`.`post_type` =%s AND `wp_posts`.`post_status`='publish'"
+	sql += " AND MATCH (`wp_posts`.`post_title`) AGAINST (%s IN NATURAL LANGUAGE MODE)"
+	q.append(taxonomy)
+
+	if category:
+		categorys = category_childrens(db, category)
+		categorys.append(category)
+
+		sql = """SELECT DISTINCT `wp_posts`.`ID`, `wp_posts`.`post_date`,`wp_posts`.`post_title`,`wp_posts`.`post_content` FROM `wp_term_relationships` INNER JOIN `wp_posts` ON `wp_posts`.`ID` = `wp_term_relationships`.`object_id`"""
+		sql += " WHERE `wp_posts`.`post_type` =%s AND `wp_posts`.`post_status`='publish'"
+		sql += " AND `wp_term_relationships`.`term_taxonomy_id` IN (%s)" % ','.join(map(lambda x: '%s', categorys))
+		sql += " AND MATCH (`wp_posts`.`post_title`) AGAINST (%s IN NATURAL LANGUAGE MODE)"
+
+		q += categorys
+		q.append(kw)
+	else:
+		q.append(kw)
+
+	sql += " ORDER BY `wp_posts`.`post_date` DESC"
+	sql += " LIMIT %s,%s"
+	q.append(offset)
+	q.append(limit)
+
+	rs = db.execute(sql, *q)
+
+	results = {
+		'offset': offset,
+		'max': limit,
+		'tax': taxonomy,
+		'category': query_category(db, category) if category else None,
+		'data': [{
+			         'id': x['id'],
+			         'data': x['post_date'],
+			         'title': x['post_title'],
+			         'content': x['post_content'],
+			         'category': post_categorys(db, x['id']),
+			         'meta': post_meta(db, x['id']),
+			         'attachment': post_attachment(db, x['id']),
+			         'visit': get_post_visit(db, x['id']),
+		         } for x in rs]
+	}
+	rs.close()
+
+	return results
 
 
 def query_posts(db, taxonomy, category, offset, limit):
@@ -354,6 +405,22 @@ class MainHandler(tornado.web.RequestHandler):
 		db = self.database.connect()
 		try:
 			results = query_posts(db, taxonomy, category, offset, limit)
+			self.response_json(results)
+
+		finally:
+			db.close()
+
+	def func_search_posts(self, path, data):
+		taxonomy = data.get('tax', 'post')
+		category = data.get('c', None)
+		kw = data.get('q', '')
+
+		offset = max(0, int(data.get('offset', 0)))
+		limit = min(100, int(data.get('max', 20)))
+
+		db = self.database.connect()
+		try:
+			results = search_posts(db, taxonomy, category, offset, limit, kw)
 			self.response_json(results)
 
 		finally:
