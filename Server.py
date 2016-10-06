@@ -87,7 +87,7 @@ def post_attachment(db, post_id):
 
 def category_parents(db, category_id):
 	parent = []
-	p = db.execute('SELECT DISTINCT `parent` FROM `wp_term_taxonomy` WHERE `term_id`=%s', category_id).scalar()
+	p = db.execute('SELECT `parent` FROM `wp_term_taxonomy` WHERE `term_id`=%s', category_id).scalar()
 	if p:
 		parent.append(p)
 		parent += category_parents(db, p)
@@ -97,7 +97,7 @@ def category_parents(db, category_id):
 
 def category_childrens(db, category_id):
 	parent = []
-	childrens = db.execute('SELECT DISTINCT `term_id` FROM `wp_term_taxonomy` WHERE `parent`=%s', category_id).fetchall()
+	childrens = db.execute('SELECT `term_id` FROM `wp_term_taxonomy` WHERE `parent`=%s', category_id).fetchall()
 	parent += [x['term_id'] for x in childrens]
 	for p in parent:
 		parent += category_childrens(db, p)
@@ -160,7 +160,7 @@ def query_categorys(db, taxonomy, parent_id, offset, limit):
 
 
 def query_post(db, post_id):
-	sql = """SELECT DISTINCT `wp_posts`.`ID` as `id`, `wp_posts`.`post_date`,`wp_posts`.`post_title`,`wp_posts`.`post_content` FROM `wp_posts`"""
+	sql = """SELECT `wp_posts`.`ID` as `id`, `wp_posts`.`post_date`,`wp_posts`.`post_title`,`wp_posts`.`post_content` FROM `wp_posts`"""
 	sql += " WHERE `wp_posts`.`ID`=%s AND `wp_posts`.`post_status`='publish'"
 
 	x = db.execute(sql, post_id).first()
@@ -179,7 +179,7 @@ def query_post(db, post_id):
 
 def query_posts(db, taxonomy, category, offset, limit):
 	q = []
-	sql = """SELECT DISTINCT `wp_posts`.`ID`, `wp_posts`.`post_date`,`wp_posts`.`post_title`,`wp_posts`.`post_content` FROM `wp_posts`"""
+	sql = """SELECT `wp_posts`.`ID`, `wp_posts`.`post_date`,`wp_posts`.`post_title`,`wp_posts`.`post_content` FROM `wp_posts`"""
 	sql += " WHERE `wp_posts`.`post_type` =%s AND `wp_posts`.`post_status`='publish'"
 	q.append(taxonomy)
 
@@ -187,7 +187,7 @@ def query_posts(db, taxonomy, category, offset, limit):
 		categorys = category_childrens(db, category)
 		categorys.append(category)
 
-		sql = """SELECT DISTINCT `wp_posts`.`ID`, `wp_posts`.`post_date`,`wp_posts`.`post_title`,`wp_posts`.`post_content` FROM `wp_term_relationships` INNER JOIN `wp_posts` ON `wp_posts`.`ID` = `wp_term_relationships`.`object_id`"""
+		sql = """SELECT `wp_posts`.`ID`, `wp_posts`.`post_date`,`wp_posts`.`post_title`,`wp_posts`.`post_content` FROM `wp_term_relationships` INNER JOIN `wp_posts` ON `wp_posts`.`ID` = `wp_term_relationships`.`object_id`"""
 		sql += " WHERE `wp_posts`.`post_type` =%s AND `wp_posts`.`post_status`='publish'"
 		sql += " AND `wp_term_relationships`.`term_taxonomy_id` IN (%s)" % ','.join(map(lambda x: '%s', categorys))
 
