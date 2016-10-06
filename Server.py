@@ -32,6 +32,18 @@ def json_dumps(data):
 	return json.dumps(data, cls=JsonDumper, sort_keys=False)
 
 
+def get_post_visit(db, post_id):
+	v = db.execute('SELECT `visit` FROM `posts_visit` WHERE `post_id`=%s', post_id).first()
+	return v['visit'] if v else 0
+
+
+def post_visit(db, post_id):
+	sql = "INSERT INTO `posts_visit` (`post_id`, `visit`) VALUES (%s,1) ON DUPLICATE KEY UPDATE `visit` = `visit`+1"
+	db.execute(sql, post_id)
+
+	return get_post_visit(db, post_id)
+
+
 def post_categorys(db, post_id):
 	sql = "SELECT `wp_term_taxonomy`.`taxonomy`,`wp_terms`.`term_id`,`wp_terms`.`name`,`wp_terms`.`slug`,`wp_term_taxonomy`.`parent` AS `parent_id`,b.`name` AS `parent_name`,b.`slug` as `parent_slug`,`wp_options`.`option_value` AS `poster` FROM `wp_term_relationships` INNER JOIN `wp_term_taxonomy` ON `wp_term_taxonomy`.`term_taxonomy_id` = `wp_term_relationships`.`term_taxonomy_id` INNER JOIN `wp_terms` ON `wp_term_taxonomy`.`term_id`=`wp_terms`.`term_id` LEFT JOIN `wp_terms` b ON b.term_id = `wp_term_taxonomy`.`parent` LEFT JOIN `wp_options` ON `wp_options`.`option_name` = CONCAT('z_taxonomy_image', `wp_terms`.`term_id`)"
 	sql += " WHERE `wp_term_relationships`.`object_id` = %s"
@@ -161,6 +173,7 @@ def query_post(db, post_id):
 		'category': post_categorys(db, x['id']),
 		'meta': post_meta(db, x['id']),
 		'attachment': post_attachment(db, x['id']),
+		'visit': get_post_visit(db, x['id']),
 	} if x else None
 
 
@@ -200,6 +213,7 @@ def query_posts(db, taxonomy, category, offset, limit):
 			         'category': post_categorys(db, x['id']),
 			         'meta': post_meta(db, x['id']),
 			         'attachment': post_attachment(db, x['id']),
+			         'visit': get_post_visit(db, x['id']),
 		         } for x in rs]
 	}
 	rs.close()
@@ -283,6 +297,18 @@ class MainHandler(tornado.web.RequestHandler):
 			results = query_category(db, id)
 
 			self.response_json(results)
+
+		finally:
+			db.close()
+
+	def func_visit(self, path, data):
+		id = int(data.get('id', 0))
+
+		db = self.database.connect()
+		try:
+			visit = post_visit(db, id)
+
+			self.response_json({'visit': visit})
 
 		finally:
 			db.close()
